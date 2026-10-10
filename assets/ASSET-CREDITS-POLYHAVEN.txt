@@ -1,0 +1,20 @@
+VELOCITY ATELIER — ENVIRONMENT ASSET CREDITS
+
+Poly Haven assets: CC0 1.0 Universal (public-domain dedication).
+License verification: https://polyhaven.com/license
+Legal text: https://creativecommons.org/publicdomain/zero/1.0/legalcode
+
+pine_sapling_small
+https://polyhaven.com/a/pine_sapling_small
+License: CC0-1.0
+Creators: Rob Tuytel (photography), Rico Cilliers (modeling)
+
+modular_urban_apartments_facade
+https://polyhaven.com/a/modular_urban_apartments_facade
+License: CC0-1.0
+Creators: James Ray Cock (All)
+
+Adaptations: selected modular meshes; whole-needle-component thinning; resized maps;
+UVs and vertex normals retained; alpha mask applied to pine needles; saplings scaled;
+facade modules assembled into multi-story, four-sided buildings.
+All geometry buffers and images embedded in the runnable build.

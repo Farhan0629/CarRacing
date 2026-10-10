@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>APEX//RUN</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="world" tabindex="0" aria-label="APEX//RUN 3D driving scene"></canvas>
+<div class="vignette" id="vignette"></div>
+<div id="ui">
+<header class="top" id="top"><div class="brand"><div class="monogram">AR</div><div class="wordmark">APEX<b>//</b>RUN<small>DRIVING GAME</small></div></div><div class="top-right"><span class="rank" id="career-rank">ROOKIE / LEVEL 01</span><span class="money"><span>CR</span><b id="credits">2,500</b></span><button class="icon-btn" id="settings-open" aria-label="Open settings and save manager">⚙</button></div></header>
+
+<section id="home">
+<div class="hero"><div class="eyebrow">Metropolitan Sprint · 03</div><h1>APEX<span>//RUN</span></h1><p>Dodge the traffic, chase the score, then take your machine to the coast. Garage, upgrades, rivals and replays included.</p>
+<button class="primary" id="rush-open">HIGHWAY RUSH <span class="arrow">↗</span></button>
+<div class="hero-actions"><button class="secondary" id="race-open">CIRCUIT RACE</button><button class="secondary" id="trial-open">TIME TRIAL</button><button class="secondary" id="free-open">FREE DRIVE</button><button class="secondary" id="garage-open">THE GARAGE</button></div>
+<div class="hero-meta">3D BROWSER EDITION / SINGLE PLAYER</div></div>
+<div class="car-label"><p id="home-car-brand">APEX / PERFORMANCE DIVISION</p><h2 id="home-car-name">CONCEPT GT</h2><p id="home-car-spec">640 HP &nbsp;·&nbsp; ALL-WHEEL DRIVE</p></div>
+<div class="bottom"><div class="event-card"><span class="num">01</span><div><h3>HIGHWAY RUSH</h3><p>BEST <span id="home-best">0</span> &nbsp; / &nbsp; ENDLESS CITY BOULEVARD</p></div></div><nav><button class="navlink" id="how-open">DRIVER GUIDE ↗</button></nav><div class="bottom-note">DESIGNED TO BE DRIVEN<br>WASD / ARROWS / TOUCH</div></div>
+</section>
+
+<section class="screen hidden" id="garage">
+<div class="screen-head"><div><h2>The collection.</h2><small>PAINT · UPGRADE · ACQUIRE</small></div><button class="back" data-home>← RETURN</button></div>
+<div class="panel garage-panel"><div class="car-tabs" id="car-tabs"></div><div class="eyebrow" id="garage-brand"></div><h3 id="garage-name"></h3><div class="tiny" id="garage-engine"></div><div class="specs" id="garage-specs"></div><div class="section-label">Exterior finish</div><div class="swatches" id="swatches"></div><button class="primary full" id="select-car"></button><div class="section-label">Performance atelier</div><div id="upgrades"></div><p class="fineprint">Upgrades change power, grip and braking in every mode. Credits come from Rush runs and races. Progress saves automatically in this browser; export a save file to keep a backup.</p></div>
+<div class="garage-hint">DRAG TO ROTATE<br>SCROLL TO ZOOM</div>
+</section>
+
+<section class="screen hidden" id="config">
+<div class="screen-head"><div><h2 id="config-title">Your next escape.</h2><small id="config-sub">CHOOSE YOUR CONDITIONS.</small></div><button class="back" data-home>← RETURN</button></div>
+<div class="config"><div class="track-art"><div><div class="eyebrow" id="art-eyebrow">Circuit 01</div><h3 style="margin-top:14px" id="art-title">Riviera</h3><p id="art-copy">Coastal switchbacks, cliffside villas,<br>and an uninterrupted horizon.</p></div><svg id="track-preview" viewBox="0 0 200 200" aria-label="Route preview"></svg><p id="track-detail"></p></div>
+<div class="panel">
+<div class="field"><label for="mode">DRIVE FORMAT</label><select id="mode"><option value="rush">Highway Rush · endless traffic dodge</option><option value="circuit">Circuit race · 5 AI rivals</option><option value="trial">Time trial · your best ghost</option><option value="free">Free drive · cruising traffic</option></select></div>
+<div class="field-grid"><div class="field"><label for="weather">WEATHER</label><select id="weather"><option value="clear">Clear skies</option><option value="rain">Rain · reduced grip</option></select></div><div class="field"><label for="time">TIME OF DAY</label><select id="time"><option value="day">Daylight</option><option value="sunset">Golden hour</option><option value="night">Midnight</option></select></div><div class="field" id="f-diff"><label for="difficulty">AI PACE</label><select id="difficulty"><option value="touring">Touring · relaxed</option><option value="sport" selected>Sport · balanced</option><option value="expert">Expert · demanding</option></select></div><div class="field" id="f-laps"><label for="laps">LAPS</label><select id="laps"><option value="1">1 lap</option><option value="2">2 laps</option><option value="3">3 laps</option></select></div></div>
+<div class="tiny" id="config-best"></div><button class="primary full" id="start-race">START YOUR ENGINE <span class="arrow">↗</span></button><p class="fineprint" style="margin-bottom:0">Desktop: WASD / arrows · Touch: on-screen controls.<br>Your selected car, paint and upgrades apply to every mode.</p>
+</div></div></section>
+
+<section id="hud-rush" class="hidden">
+<div class="rpanel"><div class="rspeed"><span id="r-speed">0</span> <small>KM/H</small></div><div class="rstats"><span>SCORE<b id="r-score">000000</b></span><span>BEST<b id="r-best">000000</b></span><span>PACE<b id="r-pace">90</b></span></div></div>
+<div class="rcenter"><div class="t" id="r-title">HIGHWAY RUSH</div><small id="r-sub">DAYLIGHT BOULEVARD</small></div>
+<div class="rright"><button class="icon-btn" id="r-sound" aria-label="Toggle sound">♪</button><button class="icon-btn" id="r-cam" aria-label="Change camera">CAM</button><button class="icon-btn" id="r-pause" aria-label="Pause">Ⅱ</button></div>
+<div class="nitro-wrap"><div class="nitro-label"><span>NITRO</span><span id="r-combo">COMBO ×1</span></div><div class="nitro"><i id="r-nitro"></i></div></div>
+</section>
+
+<section id="hud-race" class="hidden">
+<div class="hud-top"><div><div class="hud-label" id="position-title">POSITION</div><div class="hud-position"><strong id="position">6</strong><span id="position-total">/ 6</span></div></div><div class="hud-times"><div><span class="hud-label">LAP</span><strong id="lap">1 / 1</strong></div><div><span class="hud-label">RACE TIME</span><strong id="race-time">00:00.00</strong></div><div class="best-time"><span class="hud-label">BEST</span><strong id="best">—</strong></div></div><div class="hud-menu"><button class="icon-btn" id="pause" aria-label="Pause race">Ⅱ</button><button class="icon-btn" id="camera" aria-label="Change camera">CAM</button></div></div>
+<div class="map-box"><svg id="minimap" viewBox="0 0 200 200" aria-label="Race minimap"></svg><div class="map-label">RIVIERA / COASTLINE</div></div>
+<div class="speedometer"><div><span class="gear" id="gear">1</span><span class="speed-number" id="speed">000</span></div><div class="speed-unit">KILOMETRES / HOUR</div><div class="rpm" id="rpm"></div><div class="boostbar"><span id="boost"></span></div><div class="boost-label">BOOST / SHIFT</div></div>
+<div class="race-controls"><span><b>WASD</b> DRIVE</span><span><b>SHIFT</b> BOOST</span><span><b>SPACE</b> DRIFT</span><span><b>C</b> CAMERA</span><span><b>R</b> RECOVER</span><span><b>ESC</b> PAUSE</span></div>
+<div id="warning" class="warning hidden"></div>
+</section>
+<div id="countdown" class="countdown hidden"></div><div id="banner"></div>
+<div id="touch"><div><button data-touch="left" aria-label="Steer left">‹</button><button data-touch="right" aria-label="Steer right">›</button></div><div><button class="wide" data-touch="boost" aria-label="Boost or nitro">NITRO</button><button class="wide" data-touch="brake" aria-label="Brake">BRAKE</button><button class="wide" data-touch="throttle" aria-label="Accelerate">GAS</button></div></div>
+
+<div id="pause-screen" class="modal-wrap hidden"><div class="modal"><div class="eyebrow">Take a breath</div><h2>The road can wait.</h2><button class="primary full" id="resume">BACK TO THE DRIVE ↗</button><div class="actions"><button class="secondary" id="recover">RECOVER CAR</button><button class="secondary" id="photo">PHOTO MODE</button><button class="secondary" id="restart">RESTART</button><button class="secondary" id="quit">MAIN MENU</button></div><p class="fineprint">An unfinished race earns no credits. In free drive, just enjoy the road.</p></div></div>
+<div id="results" class="modal-wrap hidden"><div class="modal"><div class="eyebrow" id="result-title">Finish line crossed</div><div class="result-badge"><span id="result-place">01</span> <small id="result-caption">/ CLASSIFIED</small></div><h2 id="result-message">A drive to remember.</h2><div class="result-stats" id="result-stats"></div><div class="row"><span>Reward</span><strong id="result-reward"></strong></div><div class="row"><span id="result-clean">Clean driving</span><strong id="result-xp"></strong></div><div class="actions"><button class="primary" id="race-again">AGAIN ↗</button><button class="secondary" id="results-garage">GARAGE</button><button class="secondary" id="replay">REPLAY</button><button class="secondary" id="results-menu">MENU</button></div><button class="secondary full" id="result-save">EXPORT PROGRESS ↓</button><p class="fineprint">Progress is saved automatically in this browser. Export a file for a backup you can import on another device.</p></div></div>
+<div id="settings" class="modal-wrap hidden"><div class="modal"><div style="display:flex;justify-content:space-between;align-items:center"><div class="eyebrow">Make it yours</div><button class="back" id="settings-close">CLOSE ×</button></div><h2>Driver preferences.</h2>
+<div class="row"><label for="volume">Engine &amp; effects</label><input id="volume" type="range" min="0" max="100" value="25"></div>
+<div class="row"><label for="quality">Rendering quality</label><select class="select" id="quality"><option value="low">Low · no shadows</option><option value="balanced" selected>Balanced</option><option value="high">High</option></select></div>
+<div class="row"><label for="sensitivity">Rush steering sensitivity</label><input id="sensitivity" type="range" min="65" max="135" value="100"></div>
+<div class="row"><label for="assist">Light steering assist (circuit)</label><input id="assist" type="checkbox" checked></div>
+<div class="row"><label for="motion">Camera motion effects</label><input id="motion" type="checkbox" checked></div>
+<div class="row"><label for="touch-controls">Always show touch controls</label><input id="touch-controls" type="checkbox"></div>
+<div class="save-box"><button class="secondary" id="export-save">EXPORT SAVE ↓</button><label class="secondary file">IMPORT SAVE ↑<input id="import-save" type="file" accept=".json,application/json"></label><button class="secondary" id="reset-save">RESET PROGRESS</button></div>
+<p class="fineprint">Saves are stored in this browser and can also be exported as a file. Import accepts APEX//RUN saves and Velocity Atelier (V2) saves. Not anti-cheat protected.</p><div class="actions"><button class="secondary" id="settings-guide">DRIVER GUIDE</button></div></div></div>
+<div id="guide" class="modal-wrap hidden"><div class="modal"><div style="display:flex;justify-content:space-between"><div class="eyebrow">Driver's handbook</div><button class="back" id="guide-close">CLOSE ×</button></div><h2>Find your flow.</h2>
+<p><b>Highway Rush:</b> weave through oncoming traffic. Near misses build your combo; your pace rises as your score grows. Nitro burns the blue bar. One hit ends the run.</p>
+<div class="row"><span>Accelerate / brake</span><span><b class="key">W</b> <b class="key">S</b> or ↑ ↓</span></div><div class="row"><span>Steer</span><span><b class="key">A</b> <b class="key">D</b> or ← →</span></div><div class="row"><span>Rush nitro</span><span><b class="key">SPACE</b> or <b class="key">SHIFT</b></span></div><div class="row"><span>Circuit boost / handbrake</span><span><b class="key">SHIFT</b> <b class="key">SPACE</b></span></div><div class="row"><span>Camera / recover / pause</span><span><b class="key">C</b> <b class="key">R</b> <b class="key">ESC</b> or <b class="key">P</b></span></div>
+<p><b>Circuit modes:</b> follow the green checkpoint posts in order. Finish races for credits and XP, tune your car in the garage, and race your own best ghost in Time Trial. Wet asphalt means less grip and longer braking, in every mode.</p>
+<p>Gamepad: left stick steer, right trigger accelerate, left trigger brake, A boost/nitro, X handbrake, Y camera, Start pause.</p>
+<p class="fineprint">Concept GT model: Eric Chadwick / Darmstadt Graphics Group, CC BY 4.0. Fictional original vehicles (Aerion, Velaris, Nexo). Environment assets: <a href="https://polyhaven.com/a/pine_sapling_small" target="_blank" rel="noopener">Pine Sapling Small</a> and <a href="https://polyhaven.com/a/modular_urban_apartments_facade" target="_blank" rel="noopener">Modular Urban Apartments Facade</a> via Poly Haven, CC0. Three.js © 2010–2023 three.js authors, MIT. Sounds are synthesized, not recorded engines. A scoped browser game: simplified dynamics and AI, no licensed vehicles, no multiplayer.</p>
+<p class="fineprint" id="test-summary"></p></div></div>
+<div id="photo-ui" class="hidden"><div class="photo-label">APEX//RUN / PHOTO STUDIO</div><div class="toolbar"><span>DRAG TO ORBIT · SCROLL TO ZOOM</span><label class="tiny" for="photo-exposure">LIGHT</label><input id="photo-exposure" type="range" min=".4" max="2" step=".05" value="1"><button class="primary" id="capture">CAPTURE ↓</button><button class="secondary" id="photo-exit">BACK</button></div></div>
+<div id="replay-ui" class="hidden"><div class="photo-label">REPLAY / YOUR LAST DRIVE</div><div class="toolbar"><button class="secondary" id="replay-toggle">Ⅱ</button><input id="replay-scrub" type="range" min="0" max="100" value="0" aria-label="Replay position"><select id="replay-speed" aria-label="Replay speed"><option value=".5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select><button class="secondary" id="replay-camera">CAMERA</button><button class="secondary" id="replay-exit">RESULTS</button></div></div>
+<div id="toast" class="hidden" role="status"></div>
+</div>
+<div id="loading"><div class="load-logo">AR</div><span id="loading-text">PREPARING YOUR DRIVE...</span></div>
+
+<script src="vendor/three.min.js"></script>
+<script src="vendor/GLTFLoader.js"></script>
+<script src="assets/car-data.js"></script>
+<script src="js/core.js"></script>
+<script src="js/vehicles.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/scenery.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/stage-rush.js"></script>
+<script src="js/stage-circuit.js"></script>
+<script src="js/tests.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
