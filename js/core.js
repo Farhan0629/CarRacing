@@ -11,6 +11,29 @@ APEX.core = (() => {
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lerp = (a, b, t) => a + (b - a) * t;
   const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+  // One source of truth for circuit visuals, traffic and collision clearance.
+  // Rush is a separate boulevard and intentionally keeps its existing width.
+  const CIRCUIT = Object.freeze({
+    roadHalfWidth: 13, shoulderEdge: 15.5, railLane: 15.6,
+    barrier: 14.3, offRoadLane: 12.5, bankOuterLane: 37,
+    gridLane: 4.2, passingLane: 5.2, wheelbase: 2.75,
+    carHalfWidth: 1.1, carHalfLength: 2.4, railHalfThickness: .08, wallMargin: .12
+  });
+  const circuitGroundY = (roadY, lane) => Math.abs(lane) > CIRCUIT.bankOuterLane ? -1.2 :
+    lerp(roadY - .06, -2.2, clamp((Math.abs(lane) - CIRCUIT.shoulderEdge) / (CIRCUIT.bankOuterLane - CIRCUIT.shoulderEdge), 0, 1));
+  function circuitSteeringAngle(speed, assist = true) {
+    const v = Math.abs(speed), direct = .42 / (1 + v * .065);
+    if (!assist) return direct;
+    // Keep parking-speed maneuverability, but don't turn a held digital key
+    // into full steering lock once moving. Higher-speed turns remain tire-limited.
+    const precise = .105 / (1 + (v / 42) ** 2);
+    return lerp(direct, precise, clamp((v - 2) / 6, 0, 1));
+  }
+  function circuitBarrierLimit(headingDelta) {
+    const extent = CIRCUIT.carHalfWidth * Math.abs(Math.cos(headingDelta)) +
+      CIRCUIT.carHalfLength * Math.abs(Math.sin(headingDelta));
+    return Math.min(CIRCUIT.barrier, CIRCUIT.railLane - CIRCUIT.railHalfThickness - CIRCUIT.wallMargin - extent);
+  }
 
   /* ------------------------------------------------------------------ roster */
   // kind 'glb' = the detailed Concept GT model, 'proc' = procedural cars from V2.
@@ -55,8 +78,22 @@ APEX.core = (() => {
       const frames = p.ghost.frames.filter(f => Array.isArray(f) && f.length === 5 && f.every(Number.isFinite) && Math.abs(f[1]) < 2000 && Math.abs(f[2]) < 2000);
       if (frames.length > 1 && frames.length === p.ghost.frames.length && frames.every((f, i) => i === 0 || f[0] > frames[i - 1][0])) r.ghost = { key: p.ghost.key, frames };
     }
+    // Old saves used the same key for circuit and trial. Preserve those records
+    // as circuit times; only a saved ghost is evidence of a previous trial.
+    for (const [key, value] of Object.entries(r.best)) {
+      if (!/^(circuit|trial|free):/.test(key)) r.best['circuit:' + key] ??= value;
+    }
+    if (r.ghost && !/^(circuit|trial|free):/.test(r.ghost.key)) {
+      r.ghost.key = 'trial:' + r.ghost.key;
+      const recordedTime = r.ghost.frames[r.ghost.frames.length - 1][0];
+      if (recordedTime > 10 && recordedTime < 36000) r.best[r.ghost.key] ??= recordedTime;
+    }
     return r;
   }
+  const raceKey = (profile, options) => [
+    options.mode, options.weather, options.time, profile.selected,
+    options.mode === 'trial' ? 1 : options.laps
+  ].join(':');
   function spec(profile, id) {
     const c = carById(id || profile.selected), u = profile.upgrades[c.id] || {};
     return { ...c, accel: c.accel * (1 + (u.engine || 0) * .055), top: c.top * (1 + (u.engine || 0) * .025), grip: c.grip * (1 + (u.tires || 0) * .055), brake: 17 * (1 + (u.brakes || 0) * .09) };
@@ -105,17 +142,17 @@ APEX.core = (() => {
       this.profile = profile; this.options = { mode: 'circuit', weather: 'clear', time: 'sunset', difficulty: 'sport', laps: 1, ...options };
       if (this.options.mode === 'trial') this.options.laps = 1;
       this.spec = spec(profile); this.track = new Track(); this.elapsed = 0; this.countdown = 3; this.status = 'countdown';
-      const p = this.track.at(0, -2.7);
-      this.player = { ...p, v: 0, heading: p.heading, steer: 0, slip: 0, progress: 0, lane: -2.7, boost: 100, gear: 1, rpm: 1000, collisions: 0, collisionCooldown: 0, drift: 0, yawRate: 0 };
+      const p = this.track.at(0, -CIRCUIT.gridLane);
+      this.player = { ...p, v: 0, heading: p.heading, steer: 0, slip: 0, progress: 0, lane: -CIRCUIT.gridLane, boost: 100, gear: 1, rpm: 1000, collisions: 0, collisionCooldown: 0, drift: 0, yawRate: 0, steeringLimit: circuitSteeringAngle(0) };
       this.nextGate = 1; this.gatesPassed = 0; this.lapTimes = []; this.lapStart = 0; this.bestLap = null; this.peak = 0; this.distance = 0;
       this.record = []; this.recordClock = 0; this.result = null; this.warning = ''; this.flash = 0; this.rewarded = false;
       const number = this.options.mode === 'trial' ? 0 : this.options.mode === 'free' ? 7 : 5;
       this.ai = Array.from({ length: number }, (_, i) => ({
         id: i, name: ['L. Moreau', 'A. Sato', 'M. Rivera', 'E. Laurent', 'K. Weiss', 'N. Park', 'T. Costa'][i],
-        s: 12 + i * 10, v: 0, lane: i % 2 ? 2.8 : -2.8, targetLane: i % 2 ? 2.8 : -2.8, pace: .92 + i * .018, finished: null,
+        s: 12 + i * 10, v: 0, lane: i % 2 ? CIRCUIT.gridLane : -CIRCUIT.gridLane, targetLane: i % 2 ? CIRCUIT.gridLane : -CIRCUIT.gridLane, pace: .92 + i * .018, finished: null,
         color: colors[(i + 1) % colors.length], car: PROC[i % PROC.length]
       }));
-      this.key = [this.options.weather, this.options.time, profile.selected, this.options.mode === 'trial' ? 1 : this.options.laps].join(':');
+      this.key = raceKey(profile, this.options);
       this.ghost = profile.ghost?.key === this.key && this.options.mode === 'trial' ? profile.ghost.frames : null;
     }
     reset() {
@@ -131,11 +168,12 @@ APEX.core = (() => {
       const p = this.player, c = this.spec, wet = this.options.weather === 'rain' ? .72 : 1;
       p.collisionCooldown = Math.max(0, p.collisionCooldown - dt); this.flash = Math.max(0, this.flash - dt);
       const steering = clamp(input.steer || 0, -1, 1), throttle = clamp(input.throttle || 0, 0, 1), brake = clamp(input.brake || 0, 0, 1);
-      const steerResponse = Math.abs(steering) < .05 || steering * p.steer < 0 ? 18 : 10;
+      const assisted = input.assist !== false;
+      const steerResponse = Math.abs(steering) < .05 || steering * p.steer < 0 ? 18 : assisted ? 5.5 : 10;
       p.steer = lerp(p.steer, steering, 1 - Math.exp(-dt * steerResponse));
       const boost = input.boost && throttle > 0 && p.boost > 0 && p.v > 5;
       p.boost = clamp(p.boost + (boost ? -28 : 9) * dt, 0, 100);
-      const aero = c.accel * (p.v / (c.top / 3.6)) ** 2, off = Math.abs(p.lane) > 8.5;
+      const aero = c.accel * (p.v / (c.top / 3.6)) ** 2, off = Math.abs(p.lane) > CIRCUIT.offRoadLane;
       let power = c.accel * throttle * (boost ? 1.34 : 1) * (c.sound === 0 ? 1 : clamp(.65 + p.v / 18, .65, 1));
       power *= wet;
       p.v += (power - aero - .35 - brake * c.brake * wet - (off ? 4 : 0)) * dt;
@@ -143,15 +181,21 @@ APEX.core = (() => {
       if (input.reverse && p.v < 1) p.v = -5;
       // +Z-forward chase view: driver's right is local -X. Input stays A=-1 / D=+1; yaw and front wheels use the opposite sign.
       // Grip-limited turns understeer; ordinary steering never creates a sideways offset.
-      const maxSteer = .42 / (1 + Math.abs(p.v) * .065);
+      const maxSteer = circuitSteeringAngle(p.v, assisted);
+      p.steeringLimit = maxSteer;
       const grip = c.grip * wet * (input.handbrake ? .76 : 1);
-      const requestedYaw = -p.v / 2.75 * Math.tan(p.steer * maxSteer);
+      const requestedYaw = -p.v / CIRCUIT.wheelbase * Math.tan(p.steer * maxSteer);
       const maxYaw = (9.81 * grip + Math.abs(p.v) * .033) / Math.max(5, Math.abs(p.v));
       let desired = clamp(requestedYaw, -maxYaw, maxYaw);
       const near = this.track.at(p.progress);
-      if (input.assist !== false && Math.abs(steering) < .05 && p.v > 3 && Math.abs(wrap(p.heading - near.heading)) < .35)
-        desired += clamp(wrap(near.heading - p.heading) * .22, -.025, .025);
-      p.yawRate = lerp(p.yawRate || 0, desired, 1 - Math.exp(-dt * (input.handbrake ? 6 : 12)));
+      if (assisted && Math.abs(steering) < .05 && p.v > 3 && Math.abs(wrap(p.heading - near.heading)) < .65) {
+        // A small lane-relative preview steadies steering release. It does not
+        // snap position, center the car, or supply enough yaw to auto-drive bends.
+        const preview = this.track.at(p.progress + clamp(p.v * .45, 6, 18), p.lane);
+        const heading = Math.atan2(preview.x - p.x, preview.z - p.z);
+        desired = clamp(desired + clamp(wrap(heading - p.heading) * .55, -.06, .06), -maxYaw, maxYaw);
+      }
+      p.yawRate = clamp(lerp(p.yawRate || 0, desired, 1 - Math.exp(-dt * (input.handbrake ? 6 : 12))), -maxYaw, maxYaw);
       if (Math.abs(steering) < .05 && !input.handbrake) p.yawRate = lerp(p.yawRate, desired, 1 - Math.exp(-dt * 14));
       p.heading += p.yawRate * dt;
       // Normal driving is heading-aligned. Deliberate handbraking is the only drift source.
@@ -165,7 +209,7 @@ APEX.core = (() => {
       if (ds > this.track.length / 2) ds -= this.track.length;
       if (ds < -this.track.length / 2) ds += this.track.length;
       p.progress += ds; p.s = n.s; p.index = n.index; p.lane = n.lane; p.y = n.y;
-      const barrier = 11;
+      const barrier = circuitBarrierLimit(wrap(p.heading - n.heading));
       if (Math.abs(n.lane) > barrier) {
         const sign = Math.sign(n.lane), q = this.track.at(n.s, sign * (barrier - .15)); p.x = q.x; p.z = q.z; p.lane = sign * (barrier - .15);
         if (p.collisionCooldown === 0 && p.v > 6) { p.collisions++; p.collisionCooldown = 1; this.flash = .45; this.warning = 'BARRIER CONTACT'; p.v *= .65; }
@@ -186,7 +230,7 @@ APEX.core = (() => {
         if (this.options.mode === 'free') target = Math.min(target, 22 + a.id * 1.2);
         let ahead = this.ai.find(b => b !== a && b.s > a.s && b.s - a.s < 24 && Math.abs(b.lane - a.lane) < 2.5);
         if (p.progress > a.s && p.progress - a.s < 22 && Math.abs(p.lane - a.lane) < 2.5) ahead = { v: p.v };
-        if (ahead) { a.targetLane = a.lane >= 0 ? -3.4 : 3.4; target = Math.min(target, ahead.v + 3); }
+        if (ahead) { a.targetLane = a.lane >= 0 ? -CIRCUIT.passingLane : CIRCUIT.passingLane; target = Math.min(target, ahead.v + 3); }
         a.lane = lerp(a.lane, a.targetLane, dt * 1.5);
         a.v += clamp(target - a.v, -13 * wet * dt, a.car.accel * wet * dt);
         a.s += a.v * dt;
@@ -201,7 +245,7 @@ APEX.core = (() => {
       this.recordClock += dt;
       if (this.recordClock >= .1 - 1e-9 && this.record.length < 6000) {
         this.recordClock = Math.max(0, this.recordClock - .1);
-        this.record.push({ t: this.elapsed, p: [p.x, p.z, p.heading, p.y], ai: this.ai.map(a => [a.s, a.lane]), v: p.v, steer: p.steer });
+        this.record.push({ t: this.elapsed, p: [p.x, p.z, p.heading, p.y], ai: this.ai.map(a => [a.s, a.lane]), v: p.v, steer: p.steer, steeringLimit: p.steeringLimit });
       }
     }
     advanceCheckpoints(progress) {
@@ -277,13 +321,19 @@ APEX.core = (() => {
       this.scroll += mps * .3 * dt; this.distance += mps * dt;
       this.score += this.speed * dt * (.75 + this.combo * .2);
       for (const t of this.traffic) {
+        const previousZ = t.z;
         const rel = Math.max(2, mps * .34 - t.speed / 3.6 * .1);
         t.z += rel * dt; t.roll += rel * dt * .34;
         if (t.z > RUSH.recycleZ) this.respawn(t);
         const dz = Math.abs(t.z - RUSH.playerZ), dx = Math.abs(t.x - this.x);
-        if (!t.near && t.z > RUSH.playerZ && dx > 1.5 && dx < 2.65) {
-          t.near = true; this.combo = Math.min(8, this.combo + 1); this.maxCombo = Math.max(this.maxCombo, this.combo); this.nearMisses++;
-          const bonus = this.combo * 500; this.score += bonus; this.events.push({ type: 'near', value: bonus });
+        // Judge the lateral clearance at the instant the car passes, never
+        // after it has already gone behind the player.
+        if (!t.near && previousZ <= RUSH.playerZ && t.z > RUSH.playerZ) {
+          t.near = true;
+          if (dx >= 1.55 && dx < 2.65) {
+            this.combo = Math.min(8, this.combo + 1); this.maxCombo = Math.max(this.maxCombo, this.combo); this.nearMisses++;
+            const bonus = this.combo * 500; this.score += bonus; this.events.push({ type: 'near', value: bonus });
+          }
         }
         if (dz < 2.5 && dx < 1.55 && this.elapsed > RUSH.grace) { this.crash(); return; }
       }
@@ -335,5 +385,5 @@ APEX.core = (() => {
   }
 
   const formatTime = s => !Number.isFinite(s) ? '—' : `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toFixed(2).padStart(5, '0')}`;
-  return { cars, PROC, paints, colors, defaultPaint, carById, fresh, validateProfile, spec, level, rank, Track, Race, RushRun, RUSH, UPGRADE_COST, UPGRADE_MAX, clamp, lerp, wrap, formatTime };
+  return { cars, PROC, paints, colors, defaultPaint, carById, fresh, validateProfile, spec, level, rank, Track, Race, RushRun, RUSH, UPGRADE_COST, UPGRADE_MAX, clamp, lerp, wrap, formatTime, raceKey, CIRCUIT, circuitGroundY, circuitSteeringAngle, circuitBarrierLimit };
 })();

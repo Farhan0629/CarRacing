@@ -130,7 +130,7 @@ APEX.tests = function(){
     const r=rush();r.traffic[0].x=r.x;r.traffic[0].z=4;r.step(1/120,{});assert(r.status==='running');
   });
   check('Rush: near miss builds combo and score',()=>{
-    const r=rush();r.elapsed=5;const t=r.traffic[0];t.x=r.x+2;t.z=4.2;t.near=false;const s=r.score;r.step(1/120,{});
+    const r=rush();r.elapsed=5;r.speed=90;const t=r.traffic[0];t.x=r.x+2;t.z=3.99;t.near=false;const s=r.score;r.step(1/120,{});
     assert(r.combo===2&&r.score>s+900&&r.events[0].type==='near');
   });
   check('Rush: respawned traffic avoids occupied lanes',()=>{
@@ -153,6 +153,82 @@ APEX.tests = function(){
   });
   check('Profile: per-car paint round-trips and rejects unknown colours',()=>{
     const p=VA.fresh();p.paint.concept='#f06a25';p.paint.aerion='#123456';const q=VA.validateProfile(JSON.parse(JSON.stringify(p)));assert(q.paint.concept==='#f06a25'&&q.paint.aerion===VA.defaultPaint.aerion);
+  });
+  check('Circuit and trial records have independent keys',()=>{
+    const p=VA.fresh(),a=new VA.Race(p,{mode:'circuit'}),b=new VA.Race(p,{mode:'trial'});
+    assert(a.key!==b.key&&a.key.startsWith('circuit:')&&b.key.startsWith('trial:'));
+  });
+  check('A faster circuit record cannot suppress the first trial ghost',()=>{
+    const p=VA.fresh(),a=new VA.Race(p,{mode:'circuit'});a.elapsed=80;a.finish();
+    const b=new VA.Race(p,{mode:'trial'});b.elapsed=90;b.record=[{t:1,p:[0,0,0,0]},{t:90,p:[1,1,0,0]}];b.finish();
+    assert(b.result.newBest&&p.ghost?.key===b.key&&p.best[a.key]===80&&p.best[b.key]===90);
+  });
+  check('Legacy records migrate without inventing a trial record',()=>{
+    const p=VA.fresh();p.best['clear:day:concept:1']=80;const q=VA.validateProfile(p);
+    assert(q.best['circuit:clear:day:concept:1']===80&&!q.best['trial:clear:day:concept:1']);
+  });
+  check('Legacy trial ghost survives migration and save round-trip',()=>{
+    const p=VA.fresh();p.best['clear:day:concept:1']=80;
+    p.ghost={key:'clear:day:concept:1',frames:[[1,0,0,0,0],[90,1,1,0,0]]};
+    const q=VA.validateProfile(p),r=VA.validateProfile(JSON.parse(JSON.stringify(q)));
+    assert(r.ghost.key==='trial:clear:day:concept:1'&&r.best[r.ghost.key]===90);
+  });
+  check('Rush: cars already behind the player cannot award near misses',()=>{
+    const r=rush();r.elapsed=5;r.speed=90;r.traffic.forEach(t=>t.z=-9999);
+    const t=r.traffic[0];t.z=20;t.x=2;r.step(1/120,{});
+    assert(r.nearMisses===0&&r.events.length===0);
+  });
+  check('Rush: a pass awards at most one bonus',()=>{
+    const r=rush();r.elapsed=5;r.speed=90;r.traffic.forEach(t=>t.z=-9999);
+    const t=r.traffic[0];t.z=3.99;t.x=2;for(let i=0;i<20;i++)r.step(1/120,{});
+    assert(r.nearMisses===1&&r.events.filter(e=>e.type==='near').length===1);
+  });
+  check('Circuit: wider asphalt and shoulder leave vehicle clearance at rails',()=>{
+    const c=VA.CIRCUIT;assert(c.roadHalfWidth*2===26&&c.offRoadLane>11);
+    assert(c.barrier+1.1<c.railLane-.08&&c.railLane>c.shoulderEdge&&c.shoulderEdge>c.roadHalfWidth);
+  });
+  check('Circuit: the added asphalt is driveable, not an invisible wall',()=>{
+    const r=race(),p=r.track.at(100,11.8);Object.assign(r.player,p,{progress:100,lane:11.8,v:8});
+    r.step(1/120,{throttle:1,assist:false});assert(r.player.collisions===0&&r.player.v>8&&Math.abs(r.player.lane)>11);
+  });
+  check('Circuit: the new barrier registers aligned and angled body contact',()=>{
+    const r=race(),p=r.track.at(100,VA.CIRCUIT.barrier+.2);Object.assign(r.player,p,{progress:100,lane:VA.CIRCUIT.barrier+.2,v:8});
+    r.step(1/120,{assist:false});assert(r.player.collisions===1&&Math.abs(r.player.lane)<=VA.CIRCUIT.barrier);
+    const angled=race(),q=angled.track.at(100,VA.CIRCUIT.barrier-.4);
+    Object.assign(angled.player,q,{progress:100,lane:VA.CIRCUIT.barrier-.4,v:8,heading:q.heading+.35});
+    angled.step(1/120,{assist:false});assert(angled.player.collisions===1);
+    for(const angle of [0,.35,Math.PI/2]){
+      const extent=VA.CIRCUIT.carHalfWidth*Math.abs(Math.cos(angle))+VA.CIRCUIT.carHalfLength*Math.abs(Math.sin(angle));
+      assert(VA.circuitBarrierLimit(angle)+extent<=VA.CIRCUIT.railLane-VA.CIRCUIT.railHalfThickness-VA.CIRCUIT.wallMargin+1e-9);
+    }
+  });
+  check('Circuit: props use the same bank slope as the widened geometry',()=>{
+    const c=VA.CIRCUIT;assert(Math.abs(VA.circuitGroundY(3,c.shoulderEdge)-2.94)<1e-8);
+    assert(Math.abs(VA.circuitGroundY(3,c.bankOuterLane)+2.2)<1e-8&&VA.circuitGroundY(3,c.bankOuterLane+1)===-1.2);
+  });
+  check('Circuit: assisted low-speed steering is calmer, with direct steering available',()=>{
+    const v=30/3.6,a=VA.circuitSteeringAngle(v),direct=VA.circuitSteeringAngle(v,false);
+    assert(a<direct*.5&&VA.CIRCUIT.wheelbase/Math.tan(a)>25);
+    assert(VA.circuitSteeringAngle(0)===VA.circuitSteeringAngle(0,false));
+  });
+  check('Circuit: digital steering builds progressively and releases quickly',()=>{
+    const a=race(),b=race();a.player.v=b.player.v=10;
+    a.step(.1,{steer:1,assist:true});b.step(.1,{steer:1,assist:false});
+    assert(a.player.steer>0&&a.player.steer<b.player.steer);
+    for(let i=0;i<90;i++)a.step(1/120,{steer:0,assist:true});
+    assert(Math.abs(a.player.steer)<.0001);
+  });
+  check('Circuit: steering smoothing cannot exceed wet-road yaw grip limits',()=>{
+    const r=race({weather:'rain'});r.player.v=35;r.player.yawRate=2;
+    r.step(1/120,{steer:-1,assist:true});
+    const v=r.player.v,limit=(9.81*r.spec.grip*.72+Math.abs(v)*.033)/Math.max(5,Math.abs(v));
+    assert(Math.abs(r.player.yawRate)<=limit+1e-9&&r.player.slip===0);
+  });
+  check('Circuit: replay captures the actual manual steering limit',()=>{
+    const r=race();r.player.v=12;
+    for(let i=0;i<24;i++)r.step(1/120,{steer:1,assist:false});
+    const frame=r.record[r.record.length-1];assert(Number.isFinite(frame.steeringLimit));
+    assert(Math.abs(frame.steeringLimit-VA.circuitSteeringAngle(frame.v,false))<1e-8);
   });
   return results;
 };

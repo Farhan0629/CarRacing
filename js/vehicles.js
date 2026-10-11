@@ -144,13 +144,20 @@ APEX.vehicles = (() => {
   /* --------------------------------------------- procedural cars (from V2) */
   function loft(sections, mat) {
     const vertices = [], idx = [];
-    for (const [z, width, bottom, top] of sections) {
+    // Subdivide the longitudinal profile and soften cross-section corners.
+    // This keeps each fictional vehicle's silhouette without the coarse slabs.
+    const profile = new T.CatmullRomCurve3(sections.map(s => new T.Vector3(s[1], s[2], s[3])), false, 'catmullrom', .18);
+    const steps = (sections.length - 1) * 4, n = 27;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps, at = t * (sections.length - 1), lo = Math.min(sections.length - 2, Math.floor(at));
+      const z = APEX.core.lerp(sections[lo][0], sections[lo + 1][0], at - lo), p = profile.getPoint(t);
+      const width = p.x, bottom = p.y, top = Math.max(bottom + .02, p.z);
       const cross = [[-.75, bottom], [.75, bottom], [1, bottom + .1], [1, top - .08], [.74, top], [0, top + .025], [-.74, top], [-1, top - .08], [-1, bottom + .1]];
-      for (const [x, y] of cross) vertices.push(x * width, y, z);
+      const ring = new T.CatmullRomCurve3(cross.map(([x, y]) => new T.Vector3(x * width, y, z)), true, 'catmullrom', .12);
+      for (let k = 0; k < n; k++) { const q = ring.getPoint(k / n); vertices.push(q.x, q.y, q.z); }
     }
-    const n = 9;
-    for (let j = 0; j < sections.length - 1; j++) for (let k = 0; k < n; k++) { const a = j * n + k, b = j * n + (k + 1) % n, c = (j + 1) * n + k, d = (j + 1) * n + (k + 1) % n; idx.push(a, b, c, b, d, c); }
-    for (let k = 1; k < n - 1; k++) { idx.push(0, k + 1, k); const o = (sections.length - 1) * n; idx.push(o, o + k, o + k + 1); }
+    for (let j = 0; j < steps; j++) for (let k = 0; k < n; k++) { const a = j * n + k, b = j * n + (k + 1) % n, c = (j + 1) * n + k, d = (j + 1) * n + (k + 1) % n; idx.push(a, b, c, b, d, c); }
+    for (let k = 1; k < n - 1; k++) { idx.push(0, k + 1, k); const o = steps * n; idx.push(o, o + k, o + k + 1); }
     const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(vertices, 3)); g.setIndex(idx); g.computeVertexNormals();
     const mesh = new T.Mesh(g, mat); mesh.castShadow = true; mesh.receiveShadow = true; return mesh;
   }
@@ -158,28 +165,28 @@ APEX.vehicles = (() => {
   function proceduralRig(id, color, ghost) {
     const g = new T.Group(), kind = { aerion: 0, velar: 1, nexo: 2 }[id] ?? 0, owned = [];
     const track = m => { owned.push(m); return m; };
-    const paint = track(new T.MeshPhysicalMaterial({ color, metalness: .78, roughness: .25, clearcoat: 1, clearcoatRoughness: .12 }));
+    const paint = track(new T.MeshPhysicalMaterial({ color, metalness: .5, roughness: .24, clearcoat: 1, clearcoatRoughness: .1 }));
     const black = track(material('#101417', .2, .35)), glass = track(new T.MeshPhysicalMaterial({ color: '#162b35', metalness: .65, roughness: .09, clearcoat: 1 }));
     const silver = track(material('#8c979c', .9, .23)), rubber = track(material('#111417', .05, .91)), accent = track(material('#f06332', .2, .4));
     const light = track(new T.MeshStandardMaterial({ color: '#e5faff', emissive: '#bbf0ff', emissiveIntensity: 2.8 }));
     const tail = track(new T.MeshStandardMaterial({ color: '#ff2c20', emissive: '#ff1808', emissiveIntensity: 2 }));
     const length = kind === 1 ? 1.045 : kind === 2 ? 1.07 : 1;
-    g.add(loft([[-2.2, .80, .37, .75], [-1.8, .98, .31, .98], [-1.25, 1.00, .30, 1.02], [-.5, .92, .3, .93], [.4, .88, .31, .91], [1.25, .99, .34, .85], [1.9, .90, .36, .64], [2.25, .68, .41, .58]], paint));
+    g.add(loft([[-2.2, .80, .37, .75], [-1.8, .98, .31, .98], [-1.25, 1.00, .30, 1.02], [-.5, .92, .3, .93], [.4, .88, .31, .91], [1.25, .99, .34, .85], [1.9, .90, .36, .64], [2.25, .82, .41, .58]], paint));
     g.add(loft([[-1.3, .68, .87, .94], [-.63, .72, .86, 1.45], [.25, .67, .86, 1.47], [1.04, .70, .82, .91]], glass));
     g.add(loft([[-.67, .57, 1.43, 1.48], [.21, .54, 1.44, 1.5]], paint));
     g.add(box(1.89, .09, 3.4, black, 0, .32, 0));
     g.add(box(1.73, .09, .4, black, 0, .38, 2.1), box(1.88, .13, .37, black, 0, .35, -2.1));
     for (const sign of [-1, 1]) {
-      g.add(box(.45, .058, .08, light, sign * .55, .65, 2.16));
-      g.add(box(.47, .035, .065, light, sign * .59, .56, 2.17));
+      g.add(box(.45, .04, .08, light, sign * .55, .56, 2.16));
+      g.add(box(.47, .025, .065, light, sign * .59, .49, 2.17));
       g.add(box(.26, .14, .44, black, sign * .83, .55, 1.9));
       g.add(box(.36, .05, .24, black, sign * 1.08, 1.02, .35));
       g.add(box(.07, .03, .16, paint, sign * .97, 1, .38));
       g.add(box(.045, .025, 1.8, paint, sign * .72, 1.06, -.15));
       g.add(box(.055, .35, .76, black, sign * .927, .63, -.38));
-      const blade = box(.045, .38, .06, paint, sign * .71, 1.22, .61); blade.rotation.x = .72; g.add(blade);
+      const blade = box(.045, .38, .06, paint, sign * .71, 1.22, .61); blade.rotation.x = -.72; g.add(blade);
     }
-    g.add(box(1.62, .05, .055, tail, 0, .81, -2.19));
+    g.add(box(1.62, .05, .055, tail, 0, .73, -2.19));
     for (let i = -3; i <= 3; i++) g.add(box(.04, .20, .5, black, i * .21, .37, -2.1));
     for (let i = -3; i <= 3; i++) g.add(box(1.05, .025, .048, black, 0, .976, -1.1 - i * .095));
     if (kind !== 2) {
@@ -198,6 +205,9 @@ APEX.vehicles = (() => {
       for (let j = 0; j < 7; j++) { const spoke = box(.045, .49, .032, silver, Math.sign(x) * .145, 0, 0); spoke.rotation.x = j / 7 * Math.PI * 2; wheel.add(spoke); }
       const nut = new T.Mesh(new T.CylinderGeometry(.067, .067, .295, 12), silver); nut.rotation.z = Math.PI / 2; wheel.add(nut);
       wheels.push({ spin: wheel, pivot: wheel, axis: 'y', front: z > 0 }); g.add(wheel);
+      // Sculpted upper wheel-arch lips join the tires to the painted body.
+      const lip = new T.Mesh(new T.TorusGeometry(.49, .035, 8, 40, Math.PI), paint);
+      lip.rotation.y = Math.PI / 2; lip.position.set(x, .44, z); lip.castShadow = true; g.add(lip);
       g.add(box(.10, .23, .12, accent, x, .46, z + .19));
     }
     for (const s of [-1, 1]) g.add(box(.5, .45, .46, black, s * .33, .96, -.25));

@@ -48,6 +48,10 @@
     view = next;
     const show = next === 'hud' ? (kind === 'rush' ? 'hud-rush' : 'hud-race') : next;
     ALL.forEach(id => hide(id, id !== show));
+    if (next !== 'hud') {
+      hide('countdown');
+      clearTimeout(bannerTimer); $('banner').classList.remove('show');
+    }
     const inRace = IN_RACE.includes(next); hide('top', inRace); hide('vignette', inRace || next === 'garage' && false);
     if (!inRace) showroom();
     updateTouch(); $('world').focus({ preventScroll: true });
@@ -59,6 +63,7 @@
   function updateTouch() {
     const t = $('touch'), want = view === 'hud' && (settings.showTouch || matchMedia('(pointer:coarse)').matches);
     t.classList.toggle('on', want); t.classList.toggle('rush', kind === 'rush');
+    $('ui').classList.toggle('touch-driving', want);
   }
   function download(data, name, type) {
     const blob = data instanceof Blob ? data : new Blob([data], { type }), url = URL.createObjectURL(blob), a = document.createElement('a');
@@ -148,7 +153,7 @@
   function updateBest() {
     const c = readConfig();
     if (c.mode === 'rush') { $('config-best').textContent = `Best score / ${profile.rushBest.toLocaleString()} · ${profile.rushRuns} runs · furthest ${profile.rushFar.toLocaleString()} m`; return; }
-    const key = [c.weather, c.time, profile.selected, c.mode === 'trial' ? 1 : c.laps].join(':');
+    const key = core.raceKey(profile, c);
     $('config-best').textContent = profile.best[key] ? `Personal best / ${formatTime(profile.best[key])}` : 'Automatic transmission · steering assist available';
   }
   function initMaps() {
@@ -260,13 +265,15 @@
     const f = sim.record; if (!f.length) return null;
     let lo = 0, hi = f.length - 1; while (lo + 1 < hi) { const m = (lo + hi) >> 1; if (f[m].t <= replayTime) lo = m; else hi = m; }
     const a = f[lo], b = f[hi], t = clamp((replayTime - a.t) / Math.max(.001, b.t - a.t), 0, 1), L = core.lerp;
-    return { race: sim, replay: { v: L(a.v, b.v, t), steer: L(a.steer || 0, b.steer || 0, t), p: [L(a.p[0], b.p[0], t), L(a.p[1], b.p[1], t), a.p[2] + core.wrap(b.p[2] - a.p[2]) * t, L(a.p[3], b.p[3], t)], ai: a.ai.map((v, i) => [L(v[0], b.ai[i][0], t), L(v[1], b.ai[i][1], t)]) } };
+    return { race: sim, replay: { v: L(a.v, b.v, t), steer: L(a.steer || 0, b.steer || 0, t), steeringLimit: L(a.steeringLimit ?? core.circuitSteeringAngle(a.v), b.steeringLimit ?? core.circuitSteeringAngle(b.v), t), p: [L(a.p[0], b.p[0], t), L(a.p[1], b.p[1], t), a.p[2] + core.wrap(b.p[2] - a.p[2]) * t, L(a.p[3], b.p[3], t)], ai: a.ai.map((v, i) => [L(v[0], b.ai[i][0], t), L(v[1], b.ai[i][1], t)]) } };
   }
 
   /* -------------------------------------------------------------- main loop */
   function frame(now) {
     requestAnimationFrame(frame);
-    const dt = last ? Math.min(.075, (now - last) / 1000) : 0; last = now; if (!engine) return;
+    // A queued rAF timestamp can predate a session/resume's performance.now().
+    // Never let that stale callback put the physics accumulator below zero.
+    const dt = last ? clamp((now - last) / 1000, 0, .075) : 0; last = now; if (!engine) return;
     let f = null;
     if (sim && view === 'hud' && !paused) {
       const input = getInput(); accumulator = Math.min(accumulator + dt, .15);
