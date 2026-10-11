@@ -18,19 +18,19 @@ if (output) fs.mkdirSync(output, { recursive: true });
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error' && /shader|WebGL|THREE/.test(message.text())) errors.push(message.text()); });
     await page.goto(url); await page.waitForFunction(() => window.APEX?.debug, null, { timeout: 60000 });
-    assert.match(await page.locator('#test-summary').textContent(), /42 \/ 42 passed/);
+    assert.match(await page.locator('#test-summary').textContent(), /50 \/ 50 passed/);
     await page.locator('#settings-open').click(); await page.locator('#settings-guide').click();
     await page.locator('#guide-close').click(); await page.locator('#settings-close').click();
     // Software-rendered CI cannot measure handling or FPS. Keep the real rAF,
     // input and HUD loop running, but draw only the frames being inspected.
-    await page.evaluate(() => { const e = APEX.debug.engine; e.qaRender = e.render.bind(e); e.render = () => {}; });
+    await page.evaluate(() => { const e = APEX.debug.engine; e.qaRender = e.render.bind(e); e.render = (dt, frame) => { e.lastFrame = frame; }; });
     return page;
   }
   async function shot(page, name) {
     if (!output) return;
     await page.evaluate(() => {
       const d = APEX.debug, sim = d.sim;
-      const frame = sim ? sim instanceof d.core.RushRun ? { state: sim.visual(), racing: true } : { race: sim, replay: null } : null;
+      const frame = d.view === 'replay-ui' ? d.engine.lastFrame : sim ? sim instanceof d.core.RushRun ? { state: sim.visual(), racing: true } : { race: sim, replay: null } : null;
       d.engine.qaRender(0, frame);
     });
     await page.screenshot({ path: path.join(output, name + '.png') });
@@ -70,6 +70,11 @@ if (output) fs.mkdirSync(output, { recursive: true });
     await drive(desktop, { mode: 'rush', time: 'night', weather: 'rain' }); await shot(desktop, 'rush-night-rain');
     await drive(desktop, { mode: 'circuit', time: 'sunset', weather: 'clear' }, 180); await shot(desktop, 'circuit-sunset');
     await drive(desktop, { mode: 'trial', time: 'day', weather: 'clear' }, 500); await shot(desktop, 'trial-day');
+    await desktop.evaluate(() => APEX.debug.sim.finish());
+    await desktop.waitForFunction(() => APEX.debug.view === 'results');
+    await desktop.locator('#replay').click();
+    await desktop.waitForFunction(() => Number.isFinite(APEX.debug.engine.lastFrame?.replay?.steeringLimit));
+    await shot(desktop, 'trial-replay'); await desktop.locator('#replay-exit').click();
     await drive(desktop, { mode: 'free', time: 'night', weather: 'rain' }, 300); await shot(desktop, 'free-night-rain');
     await desktop.keyboard.press('Escape'); await desktop.locator('#photo').click();
     assert.equal(await desktop.evaluate(() => APEX.debug.engine.photo.on), true); await shot(desktop, 'photo');
@@ -85,6 +90,6 @@ if (output) fs.mkdirSync(output, { recursive: true });
       });
       assert.equal(overlap, false); await shot(mobile, name + '-rush'); await mobile.close();
     }
-    assert.deepEqual(errors, []); console.log('Browser smoke checks passed: four modes, weather/time, photo, countdown cleanup, and touch HUD at three sizes.');
+    assert.deepEqual(errors, []); console.log('Browser smoke checks passed: four modes, weather/time, photo/replay, countdown cleanup, and touch HUD at three sizes.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

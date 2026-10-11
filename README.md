@@ -67,7 +67,7 @@ With zero npm dependencies, no bundling process, and no local server requirement
 - Backwards-compatible save import for *Velocity Atelier (V2)* files with automatic best-score migration.
 
 ### 🧪 Automated Self-Verification
-- Built-in test suite executing **42 automated logic assertions** on every boot (verifying physics constants, track geometry, progression rewards, and save serialization). View status inside the Driver Guide.
+- Built-in test suite executing **50 automated logic assertions** on every boot (verifying physics constants, track geometry, progression rewards, and save serialization). View status inside the Driver Guide.
 
 ---
 
@@ -161,7 +161,7 @@ CarRacing/
 │   ├── scenery.js                     # Procedural environment loader (villas, foliage)
 │   ├── audio.js                       # Procedural Web Audio API sound synthesizer
 │   ├── game.js                        # Session coordinator, UI events, replays, camera modes
-│   └── tests.js                       # 42 self-executing unit & logic verification tests
+│   └── tests.js                       # 50 self-executing unit & logic verification tests
 ├── vendor/
 │   ├── three.min.js                   # Three.js 3D library (r160)
 │   └── GLTFLoader.js                  # GLTF/GLB model loader
@@ -202,6 +202,7 @@ Run the pure simulation and save tests without installing packages:
 
 ```bash
 node tests/run-core.cjs
+node tests/circuit-handling.cjs
 ```
 
 Optional browser smoke tests cover all four modes, countdown cleanup, photo mode, and touch HUD spacing at 390px portrait, 320px portrait, and 844px landscape. These are functional checks, not hardware performance benchmarks.
@@ -215,3 +216,11 @@ node tests/browser-smoke.cjs
 ```
 
 Set `SCREENSHOT_DIR` to write visual QA captures. Existing saves remain compatible: old shared records are retained as circuit records, and an existing Time Trial ghost is migrated to its own trial record.
+
+### Circuit width and steering
+
+The shared Riviera circuit now has **26 metres of asphalt** (previously 18), with shoulders, rails, checkpoints, start gantry, scenery placement, and player collision clearance aligned to the same dimensions. Highway Rush is unchanged.
+
+With **Light steering assist** enabled, steering builds progressively and is less sensitive at lower driving speeds. Parking-speed maneuverability remains available, while steering release gets a small stabilizing correction. Turn rates still obey tire grip, including rain; assistance does not snap the car to a lane or auto-drive the circuit. Turn assist off in Settings to retain the direct steering response. Brake for fast, tight corners rather than holding full lock at maximum speed.
+
+`tests/circuit-handling.cjs` completes dry and wet laps with each of the four cars using a deterministic digital-input controller. It checks completion, barrier contacts, weaving, and adequate driving pace; it is not a real-player lap-time or hardware performance benchmark. Existing saved progress and ghosts remain supported.

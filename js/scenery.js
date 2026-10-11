@@ -2,7 +2,7 @@
    Buffers, UVs and textures are embedded in assets/scenery-data.js with attribution in ASSET-CREDITS-POLYHAVEN.txt. */
 window.APEX = window.APEX || {};
 APEX.Scenery=(()=>{
-  const T=THREE;
+  const T=THREE, C=APEX.core.CIRCUIT;
   function decode(text,Type){const s=atob(text),b=new Uint8Array(s.length);for(let i=0;i<s.length;i++)b[i]=s.charCodeAt(i);return new Type(b.buffer);}
   class Environment {
     constructor(renderer,pack){this.owner=renderer;this.pack=pack;this.library={};this.objects=[];this.quality='balanced';this.status='loading';}
@@ -50,7 +50,7 @@ APEX.Scenery=(()=>{
     ground(d,lane){
       const p=this.owner.track.at(d,lane);
       // Imported objects stand on the sloping road bank or island, never on the asphalt.
-      p.y=Math.abs(lane)<31?APEX.core.lerp(p.y-.06,-2.2,(Math.abs(lane)-11.5)/19.5):-1.2;
+      p.y=APEX.core.circuitGroundY(p.y,lane);
       return p;
     }
     merge(group){
@@ -114,7 +114,7 @@ APEX.Scenery=(()=>{
       const variants=[this.building(3,2),this.building(4,3)];
       // A coherent coastal village district, then isolated buildings along the drive.
       for(let i=0;i<16;i++){
-        const d=80+i*92,lane=-25-(i%3)*1.5,p=this.ground(d,lane);
+        const d=80+i*92,lane=-C.railLane-13.6-(i%3)*1.5,p=this.ground(d,lane);
         const home=variants[i%2].clone(true);home.position.set(p.x,p.y+1,p.z);
         // Local +Z facade faces outward toward the road.
         home.rotation.y=p.heading+Math.PI/2;home.scale.setScalar(1.06+(i%3)*.055);s.add(home);
@@ -122,8 +122,8 @@ APEX.Scenery=(()=>{
       }
       const trees=Object.values(this.library.pine_sapling_small.meshes);
       for(let i=0;i<138;i++){
-        const d=(i*19.1+rand()*7)%track.length,lane=-17.5-rand()*12;
-        if(d<1540&&Math.abs(lane+26)<6)continue;
+        const d=(i*19.1+rand()*7)%track.length,lane=-C.railLane-6.1-rand()*12;
+        if(d<1540&&Math.abs(lane+C.railLane+14.6)<6)continue;
         const p=this.ground(d,lane),tree=trees[i%trees.length].clone(true),scale=4.5+rand()*3.5;
         tree.scale.setScalar(scale);tree.position.set(p.x,p.y,p.z);tree.rotation.y=rand()*Math.PI*2;
         tree.traverse(m=>{if(m.isMesh)m.castShadow=false;});s.add(tree);

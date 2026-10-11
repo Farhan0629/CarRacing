@@ -183,5 +183,52 @@ APEX.tests = function(){
     const t=r.traffic[0];t.z=3.99;t.x=2;for(let i=0;i<20;i++)r.step(1/120,{});
     assert(r.nearMisses===1&&r.events.filter(e=>e.type==='near').length===1);
   });
+  check('Circuit: wider asphalt and shoulder leave vehicle clearance at rails',()=>{
+    const c=VA.CIRCUIT;assert(c.roadHalfWidth*2===26&&c.offRoadLane>11);
+    assert(c.barrier+1.1<c.railLane-.08&&c.railLane>c.shoulderEdge&&c.shoulderEdge>c.roadHalfWidth);
+  });
+  check('Circuit: the added asphalt is driveable, not an invisible wall',()=>{
+    const r=race(),p=r.track.at(100,11.8);Object.assign(r.player,p,{progress:100,lane:11.8,v:8});
+    r.step(1/120,{throttle:1,assist:false});assert(r.player.collisions===0&&r.player.v>8&&Math.abs(r.player.lane)>11);
+  });
+  check('Circuit: the new barrier registers aligned and angled body contact',()=>{
+    const r=race(),p=r.track.at(100,VA.CIRCUIT.barrier+.2);Object.assign(r.player,p,{progress:100,lane:VA.CIRCUIT.barrier+.2,v:8});
+    r.step(1/120,{assist:false});assert(r.player.collisions===1&&Math.abs(r.player.lane)<=VA.CIRCUIT.barrier);
+    const angled=race(),q=angled.track.at(100,VA.CIRCUIT.barrier-.4);
+    Object.assign(angled.player,q,{progress:100,lane:VA.CIRCUIT.barrier-.4,v:8,heading:q.heading+.35});
+    angled.step(1/120,{assist:false});assert(angled.player.collisions===1);
+    for(const angle of [0,.35,Math.PI/2]){
+      const extent=VA.CIRCUIT.carHalfWidth*Math.abs(Math.cos(angle))+VA.CIRCUIT.carHalfLength*Math.abs(Math.sin(angle));
+      assert(VA.circuitBarrierLimit(angle)+extent<=VA.CIRCUIT.railLane-VA.CIRCUIT.railHalfThickness-VA.CIRCUIT.wallMargin+1e-9);
+    }
+  });
+  check('Circuit: props use the same bank slope as the widened geometry',()=>{
+    const c=VA.CIRCUIT;assert(Math.abs(VA.circuitGroundY(3,c.shoulderEdge)-2.94)<1e-8);
+    assert(Math.abs(VA.circuitGroundY(3,c.bankOuterLane)+2.2)<1e-8&&VA.circuitGroundY(3,c.bankOuterLane+1)===-1.2);
+  });
+  check('Circuit: assisted low-speed steering is calmer, with direct steering available',()=>{
+    const v=30/3.6,a=VA.circuitSteeringAngle(v),direct=VA.circuitSteeringAngle(v,false);
+    assert(a<direct*.5&&VA.CIRCUIT.wheelbase/Math.tan(a)>25);
+    assert(VA.circuitSteeringAngle(0)===VA.circuitSteeringAngle(0,false));
+  });
+  check('Circuit: digital steering builds progressively and releases quickly',()=>{
+    const a=race(),b=race();a.player.v=b.player.v=10;
+    a.step(.1,{steer:1,assist:true});b.step(.1,{steer:1,assist:false});
+    assert(a.player.steer>0&&a.player.steer<b.player.steer);
+    for(let i=0;i<90;i++)a.step(1/120,{steer:0,assist:true});
+    assert(Math.abs(a.player.steer)<.0001);
+  });
+  check('Circuit: steering smoothing cannot exceed wet-road yaw grip limits',()=>{
+    const r=race({weather:'rain'});r.player.v=35;r.player.yawRate=2;
+    r.step(1/120,{steer:-1,assist:true});
+    const v=r.player.v,limit=(9.81*r.spec.grip*.72+Math.abs(v)*.033)/Math.max(5,Math.abs(v));
+    assert(Math.abs(r.player.yawRate)<=limit+1e-9&&r.player.slip===0);
+  });
+  check('Circuit: replay captures the actual manual steering limit',()=>{
+    const r=race();r.player.v=12;
+    for(let i=0;i<24;i++)r.step(1/120,{steer:1,assist:false});
+    const frame=r.record[r.record.length-1];assert(Number.isFinite(frame.steeringLimit));
+    assert(Math.abs(frame.steeringLimit-VA.circuitSteeringAngle(frame.v,false))<1e-8);
+  });
   return results;
 };

@@ -265,7 +265,7 @@
     const f = sim.record; if (!f.length) return null;
     let lo = 0, hi = f.length - 1; while (lo + 1 < hi) { const m = (lo + hi) >> 1; if (f[m].t <= replayTime) lo = m; else hi = m; }
     const a = f[lo], b = f[hi], t = clamp((replayTime - a.t) / Math.max(.001, b.t - a.t), 0, 1), L = core.lerp;
-    return { race: sim, replay: { v: L(a.v, b.v, t), steer: L(a.steer || 0, b.steer || 0, t), p: [L(a.p[0], b.p[0], t), L(a.p[1], b.p[1], t), a.p[2] + core.wrap(b.p[2] - a.p[2]) * t, L(a.p[3], b.p[3], t)], ai: a.ai.map((v, i) => [L(v[0], b.ai[i][0], t), L(v[1], b.ai[i][1], t)]) } };
+    return { race: sim, replay: { v: L(a.v, b.v, t), steer: L(a.steer || 0, b.steer || 0, t), steeringLimit: L(a.steeringLimit ?? core.circuitSteeringAngle(a.v), b.steeringLimit ?? core.circuitSteeringAngle(b.v), t), p: [L(a.p[0], b.p[0], t), L(a.p[1], b.p[1], t), a.p[2] + core.wrap(b.p[2] - a.p[2]) * t, L(a.p[3], b.p[3], t)], ai: a.ai.map((v, i) => [L(v[0], b.ai[i][0], t), L(v[1], b.ai[i][1], t)]) } };
   }
 
   /* -------------------------------------------------------------- main loop */
