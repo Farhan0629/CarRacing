@@ -67,7 +67,7 @@ With zero npm dependencies, no bundling process, and no local server requirement
 - Backwards-compatible save import for *Velocity Atelier (V2)* files with automatic best-score migration.
 
 ### 🧪 Automated Self-Verification
-- Built-in test suite executing **36 automated logic assertions** on every boot (verifying physics constants, track geometry, progression rewards, and save serialization). View status inside the Driver Guide.
+- Built-in test suite executing **42 automated logic assertions** on every boot (verifying physics constants, track geometry, progression rewards, and save serialization). View status inside the Driver Guide.
 
 ---
 
@@ -154,13 +154,14 @@ CarRacing/
 ├── js/
 │   ├── core.js                        # Physics engine, track curves, race math, save profiles
 │   ├── vehicles.js                    # Vehicle procedural rigs, AI controllers, traffic logic
+│   ├── visuals.js                     # Shared road/terrain textures, foliage, atmospheric sky and water
 │   ├── engine.js                      # Three.js WebGL renderer, showroom, rain particle fx
 │   ├── stage-rush.js                  # Highway Rush procedural boulevard generator
 │   ├── stage-circuit.js               # Riviera coastline circuit track & spline systems
 │   ├── scenery.js                     # Procedural environment loader (villas, foliage)
 │   ├── audio.js                       # Procedural Web Audio API sound synthesizer
 │   ├── game.js                        # Session coordinator, UI events, replays, camera modes
-│   └── tests.js                       # 36 self-executing unit & logic verification tests
+│   └── tests.js                       # 42 self-executing unit & logic verification tests
 ├── vendor/
 │   ├── three.min.js                   # Three.js 3D library (r160)
 │   └── GLTFLoader.js                  # GLTF/GLB model loader
@@ -194,3 +195,23 @@ Want to substitute the default Concept GT with your own 3D model?
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE) — feel free to explore, learn, mod, and build upon it!
+
+## Regression checks
+
+Run the pure simulation and save tests without installing packages:
+
+```bash
+node tests/run-core.cjs
+```
+
+Optional browser smoke tests cover all four modes, countdown cleanup, photo mode, and touch HUD spacing at 390px portrait, 320px portrait, and 844px landscape. These are functional checks, not hardware performance benchmarks.
+
+```bash
+npm install --no-save playwright
+npx playwright install chromium
+python -m http.server 8080
+# In a second terminal:
+node tests/browser-smoke.cjs
+```
+
+Set `SCREENSHOT_DIR` to write visual QA captures. Existing saves remain compatible: old shared records are retained as circuit records, and an existing Time Trial ghost is migrated to its own trial record.

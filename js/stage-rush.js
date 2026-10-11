@@ -4,7 +4,7 @@
 window.APEX = window.APEX || {};
 APEX.RushStage = (() => {
   'use strict';
-  const T = THREE, { clamp } = APEX.core, V = APEX.vehicles, E = APEX.engine, R = APEX.core.RUSH;
+  const T = THREE, { clamp } = APEX.core, V = APEX.vehicles, E = APEX.engine, Art = APEX.visuals, R = APEX.core.RUSH;
   const CH = R.chunkLength, COUNT = R.chunkCount, WRAP = 47;
 
   const hash = i => { const e = Math.sin(i * 129.877 + 43.327) * 43758.5453; return e - Math.floor(e); };
@@ -13,6 +13,13 @@ APEX.RushStage = (() => {
   function facadeMaterial(seed, base, maxAniso) {
     const c = document.createElement('canvas'); c.width = 512; c.height = 1024;
     const g = c.getContext('2d'); g.fillStyle = base; g.fillRect(0, 0, 512, 1024);
+    const mask = document.createElement('canvas'); mask.width = 512; mask.height = 1024;
+    const emission = mask.getContext('2d'); emission.fillStyle = '#000'; emission.fillRect(0, 0, 512, 1024);
+    const relief = mask.cloneNode(); const bump = relief.getContext('2d'); bump.fillStyle = '#bbb'; bump.fillRect(0, 0, 512, 1024);
+    for (let i = 0; i < 4500; i++) {
+      g.fillStyle = i % 2 ? 'rgba(22,31,35,.07)' : 'rgba(255,255,255,.08)';
+      g.fillRect(hash(i * 7 + seed) * 512, hash(i * 11 + seed) * 1024, 1, 2);
+    }
     const cols = 4, rows = 11;
     for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
       const x = col * 128 + 18, y = row * 93 + 13, lit = hash(seed * 199 + row * 17 + col * 23) > .87;
@@ -23,10 +30,30 @@ APEX.RushStage = (() => {
       g.fillStyle = 'rgba(220,234,238,.36)'; g.fillRect(x + 4, y + 3, 2, 56); g.fillRect(x + 43, y, 3, 64);
       g.fillStyle = 'rgba(16,28,40,.5)'; g.fillRect(x, y + 31, 90, 3);
       g.fillStyle = 'rgba(255,255,255,.11)'; g.fillRect(x + 50, y + 5, 23, 3);
+      bump.fillStyle = '#454545'; bump.fillRect(x - 4, y - 4, 98, 72); bump.fillStyle = '#777'; bump.fillRect(x, y, 90, 64);
+      if (lit) {
+        emission.fillStyle = '#ffd4a1'; emission.fillRect(x, y, 90, 64);
+        emission.fillStyle = '#000'; emission.fillRect(x + 43, y, 3, 64); emission.fillRect(x, y + 31, 90, 3);
+      }
+      // Thin rain/grime streaks beneath each sill break up the pristine repeats.
+      g.fillStyle = 'rgba(35,40,38,.09)'; g.fillRect(x + 4, y + 68, 3, 12 + hash(row + col) * 19);
     }
     for (let row = 0; row < rows; row++) { g.fillStyle = 'rgba(235,238,234,.35)'; g.fillRect(0, row * 93 + 80, 512, 5); }
     const tex = new T.CanvasTexture(c); tex.colorSpace = T.SRGBColorSpace; tex.anisotropy = Math.min(8, maxAniso);
-    return new T.MeshStandardMaterial({ map: tex, roughness: .46, metalness: .12, color: 0xffffff, emissive: 0xffe6b8, emissiveMap: tex, emissiveIntensity: 0 });
+    const glow = new T.CanvasTexture(mask); glow.colorSpace = T.SRGBColorSpace;
+    const depth = new T.CanvasTexture(relief);
+    return new T.MeshStandardMaterial({ map: tex, bumpMap: depth, bumpScale: .1, roughness: .62, metalness: .1, color: 0xffffff, emissive: 0xffe6b8, emissiveMap: glow, emissiveIntensity: 0 });
+  }
+
+  function shopMaterial(name, maxAniso) {
+    const c = document.createElement('canvas'); c.width = 512; c.height = 256; const g = c.getContext('2d');
+    g.fillStyle = '#26383f'; g.fillRect(0, 0, 512, 256);
+    const glass = g.createLinearGradient(0, 40, 512, 220); glass.addColorStop(0, '#879fa3'); glass.addColorStop(.45, '#293f4c'); glass.addColorStop(1, '#101d24');
+    g.fillStyle = glass; g.fillRect(12, 64, 488, 176);
+    g.fillStyle = '#c4bba6'; for (let x = 10; x < 512; x += 98) g.fillRect(x, 64, 6, 176);
+    g.fillStyle = '#e4bd83'; g.font = '600 27px Arial'; g.textAlign = 'center'; g.fillText(name, 256, 40);
+    const tex = new T.CanvasTexture(c); tex.colorSpace = T.SRGBColorSpace; tex.anisotropy = Math.min(8, maxAniso);
+    return new T.MeshStandardMaterial({ map: tex, roughness: .35, metalness: .25 });
   }
 
   /* Atmosphere presets. Rain overrides colour/density/intensity per time of day. */
@@ -49,6 +76,7 @@ APEX.RushStage = (() => {
       const sun = this.sun = new T.DirectionalLight(LOOKS.day.sun, LOOKS.day.sunI); sun.position.set(-35, 65, -45);
       sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -33, right: 33, top: 38, bottom: -38, near: 1, far: 180 }); sun.shadow.bias = -.00018;
       s.add(sun, sun.target);
+      this.atmosphere = new Art.Atmosphere(s, 450);
       this.maxAniso = engine.renderer.capabilities.getMaxAnisotropy();
       this.buildMaterials(); this.chunks = []; for (let i = 0; i < COUNT; i++) this.chunks.push(this.buildChunk(i));
       this.rain = E.makeRain(); s.add(this.rain);
@@ -59,7 +87,7 @@ APEX.RushStage = (() => {
     }
     buildMaterials() {
       this.mat = {
-        road: new T.MeshStandardMaterial({ color: 0x49515a, roughness: .98 }), walk: new T.MeshStandardMaterial({ color: 0xc7cbd0, roughness: .86 }),
+        road: Art.surfaceMaterial('asphalt', this.maxAniso), walk: Art.surfaceMaterial('pavement', this.maxAniso, 3),
         ground: new T.MeshStandardMaterial({ color: 0x979fa0, roughness: 1 }), lane: new T.MeshStandardMaterial({ color: 0xf2f0dc, roughness: .9 }),
         curb: new T.MeshStandardMaterial({ color: 0xe6e5da, roughness: .83 }), metal: new T.MeshStandardMaterial({ color: 0x464f57, metalness: .52, roughness: .32 }),
         trunk: new T.MeshStandardMaterial({ color: 0x715740, roughness: 1 }), leaves: new T.MeshStandardMaterial({ color: 0x397f54, roughness: .86 }),
@@ -68,6 +96,7 @@ APEX.RushStage = (() => {
       };
       this.facades = FACADES.map((c, i) => facadeMaterial(i + 1, c, this.maxAniso));
       this.roofs = [0x39434c, 0x646b6e, 0x515865, 0x9a9d9b].map(c => new T.MeshStandardMaterial({ color: c, roughness: .83 }));
+      this.shops = ['ATELIER', 'CAFÉ RIVIERA', 'APEX SERVICE', 'MOTOR CLUB'].map(name => shopMaterial(name, this.maxAniso));
       this.cube = new T.BoxGeometry(1, 1, 1); this.crown = new T.IcosahedronGeometry(1, 2);
     }
     buildChunk(i) {
@@ -75,21 +104,37 @@ APEX.RushStage = (() => {
       const add = (mat, x, y, z, sx, sy, sz, cast = false) => {
         const o = new T.Mesh(this.cube, mat); o.position.set(x, y, z); o.scale.set(sx, sy, sz); o.castShadow = cast; o.receiveShadow = true; g.add(o); return o;
       };
-      add(m.ground, 0, -.34, 0, 130, .24, CH); add(m.road, 0, -.16, 0, 13, .16, CH + .06);
+      add(m.ground, 0, -.34, 0, 130, .24, CH);
+      const asphalt = Art.roadPlane(13, CH + .06, m.road); asphalt.position.y = -.08; g.add(asphalt);
       for (const n of [-1, 1]) {
         add(m.walk, n * 8.5, -.035, 0, 2.02, .28, CH); add(m.curb, n * 6.53, .082, 0, .09, .09, CH);
+        // Mid-rise infill joins the towers into city blocks rather than leaving
+        // isolated boxes surrounded by featureless empty ground.
+        const infillHeight = 8 + hash(i * 17 + n) * 7;
+        add(this.facades[(i + (n > 0 ? 2 : 0)) % this.facades.length], n * 12.5, infillHeight / 2 - .14, 10, 5.2, infillHeight, 16, true);
+        add(this.roofs[i % 4], n * 12.5, infillHeight, 10, 5.4, .18, 16.2);
+        add(this.shops[(i + 1) % this.shops.length], n * 12.5, 1.2, 10, 5.24, 2.4, 16.08);
         for (let a = 0; a < 2; a++) {
           const r = i * 37 + a * 131 + (n + 2) * 89, h = (a ? 28 : 14) + hash(r) * (a ? 41 : 15), w = a ? 6.8 : 5.2, d = a ? 9 : 8;
           const x = n * (a ? 22 + hash(r + 3) * 3 : 12.5), z = (a ? 8 : -5) + hash(r + 4) * 4;
           add(this.facades[r % this.facades.length], x, h / 2 - .14, z, w, h, d, a === 0);
           add(this.roofs[r % 4], x, h + .12, z, w + .35, .28, d + .35);
+          if (h > 48) {
+            add(this.facades[(r + 2) % this.facades.length], x, h + 2.8, z, w * .72, 5.3, d * .76);
+            add(this.roofs[r % 4], x, h + 5.6, z, w * .76, .25, d * .8);
+          }
           if (a) { add(this.roofs[(r + 1) % 4], x + .8, h + .87, z, .9, 1.35, 1.2); if (i % 4 === 0) add(m.metal, x - .8, h + 2, z, .055, 3, .055); }
-          else add(m.shop, x, 1, z, Math.min(w - 1, 4), 1.8, d + .08);
+          else {
+            add(this.shops[r % this.shops.length], x, 1.2, z, w + .04, 2.4, d + .08);
+            add(m.metal, x, 2.45, z, w + .3, .08, d + .4);
+            for (let floor = 3.2; floor < h; floor += 3.2) add(this.roofs[r % 4], x, floor, z, w + .1, .06, d + .12);
+          }
         }
         for (let a = 0; a < 2; a++) {
-          const x = n * 8, z = -10 + a * 15;
-          add(m.trunk, x, 1.3, z, .23, 2.6, .23);
-          const leaf = new T.Mesh(this.crown, m.leaves); leaf.position.set(x, 3.4, z); leaf.scale.set(.95, 1.55, .95); leaf.castShadow = true; g.add(leaf);
+          const x = n * 8.25, z = -10 + a * 15 + hash(i * 11 + a) * 2;
+          const tree = Art.tree((i + a) % 3 + 1); tree.position.set(x, .05, z);
+          tree.rotation.y = hash(i + n * 7) * Math.PI; tree.scale.setScalar(.72 + hash(i * 3 + a) * .16); g.add(tree);
+          add(m.curb, x, .13, z, 1.6, .2, 1.6); add(m.trunk, x, .24, z, 1.4, .02, 1.4);
         }
         const px = n * 7.06;
         add(m.metal, px, 3, 13, .065, 6, .065); add(m.metal, px - n * .48, 5.98, 13, .95, .055, .055); add(m.lamp, px - n * .93, 5.88, 13, .18, .07, .18);
@@ -112,13 +157,15 @@ APEX.RushStage = (() => {
     applyLook() {
       const L = { ...(LOOKS[this.time] || LOOKS.day) }, rain = this.weather === 'rain'; if (rain) Object.assign(L, RAIN[this.time] || RAIN.day);
       const s = this.scene; s.background.set(L.bg); s.fog.color.set(L.fog); s.fog.density = L.density;
+      this.atmosphere.setConditions(this.weather, this.time, -1);
       this.hemi.color.set(L.sky); this.hemi.groundColor.set(L.ground); this.hemi.intensity = L.hemi;
       this.sun.color.set(L.sun); this.sun.intensity = L.sunI; this.exposure = L.exposure;
+      this.sun.position.y = this.time === 'sunset' ? 20 : this.time === 'night' ? 45 : 65;
       this.mat.lamp.emissiveIntensity = L.lamp; for (const f of this.facades) f.emissiveIntensity = L.windows;
-      this.mat.road.roughness = rain ? .34 : .98; this.mat.road.metalness = rain ? .22 : 0; this.mat.walk.roughness = rain ? .55 : .86;
+      this.mat.road.roughness = rain ? .23 : .92; this.mat.road.metalness = rain ? .08 : 0; this.mat.walk.roughness = rain ? .55 : .86;
       const tr = V.traffic; tr.tail.emissiveIntensity = L.tail; tr.head.emissiveIntensity = L.head;
       this.rain.visible = rain; s.environment = this.time === 'night' ? this.engine.envNight : this.engine.env;
-      if (this.rig?.beams) for (const b of this.rig.beams) { b.visible = L.beams > 0; b.intensity = L.beams; }
+      if (this.rig?.beams) for (const b of this.rig.beams) { b.visible = L.beams > 0; b.intensity = L.beams * 40; }
     }
 
     enter() { this.snap = true; this.clock = 0; this.applyLook(); this.setQuality(this.engine.quality); }
@@ -160,6 +207,7 @@ APEX.RushStage = (() => {
         cam.lookAt(this.look); this.snap = false;
       }
       if (this.rig) this.rig.group.visible = engine.photo.on || engine.camMode !== 1;   // hood camera sits inside the body
+      this.atmosphere.update(cam, dt);
       engine.renderer.render(this.scene, cam);
     }
     resetCamera() { this.snap = true; }

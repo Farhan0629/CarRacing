@@ -42,3 +42,33 @@
 .owned-tag{color:var(--accent)}
 @media(max-width:850px){#hud-rush{padding:14px}.rspeed{font-size:30px}.rcenter{display:none}.nitro-wrap{bottom:100px;width:44vw}#touch{bottom:20px}}
 @media(max-width:600px){.rstats{gap:10px}.rstats b{font-size:13px}.rright .icon-btn{width:40px}}
+
+/* Touch controls own a bottom dock. HUD telemetry stays above it in every mode,
+   including forced-touch desktop layouts and devices with a home indicator. */
+#ui{--drive-dock-height:58px;--drive-dock-bottom:max(16px,env(safe-area-inset-bottom));--drive-hud-bottom:calc(var(--drive-dock-bottom) + var(--drive-dock-height) + 20px)}
+#touch{bottom:var(--drive-dock-bottom);left:max(16px,env(safe-area-inset-left));right:max(16px,env(safe-area-inset-right))}
+#touch>div{gap:6px}
+#touch button{width:clamp(44px,12vw,58px);height:var(--drive-dock-height);font-weight:700;background:#10232ce8;border-color:#b8d8e866}
+.touch-driving #hud-race .map-box,.touch-driving #hud-race .speedometer,.touch-driving .nitro-wrap{bottom:var(--drive-hud-bottom)}
+.countdown{pointer-events:none}
+@media(max-width:600px){
+  .touch-driving #hud-race .speedometer{right:16px;min-width:132px}
+  .touch-driving #hud-race .map-box{left:16px;width:105px}
+  .touch-driving .nitro-wrap{width:min(300px,64vw)}
+  .hero .primary{width:min(280px,calc(100vw - 48px))}
+}
+@media(max-width:850px){
+  #hud-rush{grid-template-columns:1fr auto;gap:12px}
+  #hud-rush .rright{grid-column:2;gap:6px}
+  #hud-rush .rright .icon-btn{width:44px;min-height:44px}
+}
+@media(max-width:380px){
+  #hud-rush .rright{flex-direction:column}
+}
+@media(max-height:500px){
+  #ui{--drive-dock-height:44px;--drive-dock-bottom:max(10px,env(safe-area-inset-bottom));--drive-hud-bottom:calc(var(--drive-dock-bottom) + var(--drive-dock-height) + 12px)}
+  .touch-driving #hud-race .speed-number{font-size:38px}
+  .touch-driving #hud-race .speed-unit{margin:3px 0}
+  .touch-driving #hud-race .map-box svg{width:80px;height:65px}
+  .touch-driving #hud-race .rpm{margin-top:5px}
+}

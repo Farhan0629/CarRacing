@@ -55,8 +55,22 @@ APEX.core = (() => {
       const frames = p.ghost.frames.filter(f => Array.isArray(f) && f.length === 5 && f.every(Number.isFinite) && Math.abs(f[1]) < 2000 && Math.abs(f[2]) < 2000);
       if (frames.length > 1 && frames.length === p.ghost.frames.length && frames.every((f, i) => i === 0 || f[0] > frames[i - 1][0])) r.ghost = { key: p.ghost.key, frames };
     }
+    // Old saves used the same key for circuit and trial. Preserve those records
+    // as circuit times; only a saved ghost is evidence of a previous trial.
+    for (const [key, value] of Object.entries(r.best)) {
+      if (!/^(circuit|trial|free):/.test(key)) r.best['circuit:' + key] ??= value;
+    }
+    if (r.ghost && !/^(circuit|trial|free):/.test(r.ghost.key)) {
+      r.ghost.key = 'trial:' + r.ghost.key;
+      const recordedTime = r.ghost.frames[r.ghost.frames.length - 1][0];
+      if (recordedTime > 10 && recordedTime < 36000) r.best[r.ghost.key] ??= recordedTime;
+    }
     return r;
   }
+  const raceKey = (profile, options) => [
+    options.mode, options.weather, options.time, profile.selected,
+    options.mode === 'trial' ? 1 : options.laps
+  ].join(':');
   function spec(profile, id) {
     const c = carById(id || profile.selected), u = profile.upgrades[c.id] || {};
     return { ...c, accel: c.accel * (1 + (u.engine || 0) * .055), top: c.top * (1 + (u.engine || 0) * .025), grip: c.grip * (1 + (u.tires || 0) * .055), brake: 17 * (1 + (u.brakes || 0) * .09) };
@@ -115,7 +129,7 @@ APEX.core = (() => {
         s: 12 + i * 10, v: 0, lane: i % 2 ? 2.8 : -2.8, targetLane: i % 2 ? 2.8 : -2.8, pace: .92 + i * .018, finished: null,
         color: colors[(i + 1) % colors.length], car: PROC[i % PROC.length]
       }));
-      this.key = [this.options.weather, this.options.time, profile.selected, this.options.mode === 'trial' ? 1 : this.options.laps].join(':');
+      this.key = raceKey(profile, this.options);
       this.ghost = profile.ghost?.key === this.key && this.options.mode === 'trial' ? profile.ghost.frames : null;
     }
     reset() {
@@ -277,13 +291,19 @@ APEX.core = (() => {
       this.scroll += mps * .3 * dt; this.distance += mps * dt;
       this.score += this.speed * dt * (.75 + this.combo * .2);
       for (const t of this.traffic) {
+        const previousZ = t.z;
         const rel = Math.max(2, mps * .34 - t.speed / 3.6 * .1);
         t.z += rel * dt; t.roll += rel * dt * .34;
         if (t.z > RUSH.recycleZ) this.respawn(t);
         const dz = Math.abs(t.z - RUSH.playerZ), dx = Math.abs(t.x - this.x);
-        if (!t.near && t.z > RUSH.playerZ && dx > 1.5 && dx < 2.65) {
-          t.near = true; this.combo = Math.min(8, this.combo + 1); this.maxCombo = Math.max(this.maxCombo, this.combo); this.nearMisses++;
-          const bonus = this.combo * 500; this.score += bonus; this.events.push({ type: 'near', value: bonus });
+        // Judge the lateral clearance at the instant the car passes, never
+        // after it has already gone behind the player.
+        if (!t.near && previousZ <= RUSH.playerZ && t.z > RUSH.playerZ) {
+          t.near = true;
+          if (dx >= 1.55 && dx < 2.65) {
+            this.combo = Math.min(8, this.combo + 1); this.maxCombo = Math.max(this.maxCombo, this.combo); this.nearMisses++;
+            const bonus = this.combo * 500; this.score += bonus; this.events.push({ type: 'near', value: bonus });
+          }
         }
         if (dz < 2.5 && dx < 1.55 && this.elapsed > RUSH.grace) { this.crash(); return; }
       }
@@ -335,5 +355,5 @@ APEX.core = (() => {
   }
 
   const formatTime = s => !Number.isFinite(s) ? '—' : `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toFixed(2).padStart(5, '0')}`;
-  return { cars, PROC, paints, colors, defaultPaint, carById, fresh, validateProfile, spec, level, rank, Track, Race, RushRun, RUSH, UPGRADE_COST, UPGRADE_MAX, clamp, lerp, wrap, formatTime };
+  return { cars, PROC, paints, colors, defaultPaint, carById, fresh, validateProfile, spec, level, rank, Track, Race, RushRun, RUSH, UPGRADE_COST, UPGRADE_MAX, clamp, lerp, wrap, formatTime, raceKey };
 })();
